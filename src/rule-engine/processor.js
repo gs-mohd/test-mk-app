@@ -1,16 +1,22 @@
 const rules = require("./rules");
 
-// logicalOperator parser
+/**
+ * @description : logicalOperator parser
+ * @type {{
+ *      parse: (function(*): *),
+ *      logical: {OR: string, AND: string, LT: string, GTE: string, LTE: string, "=": string, GT: string}
+ *      }}
+ */
 const logicalOperator = (function() {
     return {
         logical: {
             'AND': '&&',
             'OR': '||',
             '=':'==',
-            'GREATERTHAN': '>',
-            'LESSTHAN': '<',
-            'GREATERTHANEQUAL': '>=',
-            'LESSERTHANEQUAL': '<='
+            'GT': '>',
+            'LT': '<',
+            'GTE': '>=',
+            'LTE': '<='
         },
         parse: function (rule) {
             Object.keys(this.logical).forEach(key => {
@@ -21,10 +27,18 @@ const logicalOperator = (function() {
     };
 })();
 
-
+/**
+ * @description :
+ * @type {{
+ *      regex: RegExp, getDates: (function(*): (null|*)),
+ *      exists: (function(*): boolean),
+ *      parse: (function(*=): (*)),
+ *      getDateMap: (function(*): {})
+ *      }}
+ */
 const date = (function(){
         return{
-            // supports : mm-dd-yyyy
+            // supports : m-dd-yyyy, mm-dd-yyyy, mm-d-yyyy, m-d-yyyy
             regex : /\d{1}([-/.])\d{2}([-/.])\d{4}|\d{2}([\-/.])\d{2}([-/.])\d{4}|\d{2}([\-/.])\d{1}([-/.])\d{4}|\d{1}([\-/.])\d{1}([-/.])\d{4}/g,
 
             getDateMap : function(dates){
@@ -48,9 +62,11 @@ const date = (function(){
             },
 
             parse : function (rule){
+
                 let dateMap = this.exists(rule)
                     ? this.getDates(rule)
                     : null ;
+
                 if(dateMap == null){
                     return rule;
                 }
@@ -60,38 +76,52 @@ const date = (function(){
 
                 for(let condition of conditions){
                     let element = condition.trim().split(' ');
-                    if(element.length !== 3 || dateMap[element[0]] == null || dateMap[element[2]] == null ){ continue ; }
+                    if(element.length !== 3 || dateMap[element[0]] == null || dateMap[element[2]] == null ){
+                        continue ;
+                    }
+
                     conditionMap[condition] = eval(dateMap[element[0]].getTime()+' '+element[1]+' '+dateMap[element[2]].getTime());
                 }
+
                 Object.keys(conditionMap).forEach(key=>{
                     rule = rule.replace(key,conditionMap[key]);
                 })
                 return rule;
             }
-
         };
     })();
 
+
+/**
+ * @description :
+ * @type {{
+ *      item: string,
+ *      exists: (function(*): *),
+ *      parse: (function(*=): (*))
+ *      }}
+ */
 const betweenOperator = (function(){
     return {
-        item : 'BETWEEN',
+        operatorKey : 'BETWEEN',
+
         exists: function(rule){
-            return rule.includes(this.item);
+            return rule.includes(this.operatorKey);
         },
+
         parse : function(rule){
           if(!this.exists(rule)){
               return rule;
           }
 
           let elements = rule.split(' ');
-          let itemIndex = elements.indexOf(this.item);
+          let itemIndex = elements.indexOf(this.operatorKey);
           let newRule='';
 
           if(itemIndex-1>0){
               newRule = elements.slice(0,itemIndex-2).join(' ');
+              newRule +=' ';
           }
 
-          newRule +=' ';
           newRule += [
               elements[itemIndex-1],'>',elements[itemIndex+1],
               elements[itemIndex+2],
@@ -103,8 +133,13 @@ const betweenOperator = (function(){
     }
 })();
 
+/**
+ * @description :
+ * @type {{parse: (function(*, *): *)}}
+ */
 const variables = (function(){
     return {
+
         parse: function(obj, rule){
             for(let element of rule.split(' ')){
                 if(obj[element] == null){ continue; }
@@ -112,9 +147,16 @@ const variables = (function(){
             }
             return rule;
         }
+
     };
 })();
 
+/**
+ * @description :
+ * @param obj
+ * @param rule
+ * @returns {any}
+ */
 function processor( obj, rule ){
     rule = variables.parse(obj, rule );
     rule = betweenOperator.parse(rule);
@@ -125,12 +167,15 @@ function processor( obj, rule ){
 
 module.exports  = function( obj ) {
         let res = [];
+
         if(obj==null || obj === {}){
             return null;
         }
 
         for(let rule of rules){
-            if(rule.criteria ==='...' || !rule.active || !processor(obj, rule.criteria)){ continue; }
+            if(rule.criteria ==='...' || !rule.active || !processor(obj, rule.criteria)){
+                continue;
+            }
             res.push({
                 'Name': rule.Name,
                 'Message':rule.Message
